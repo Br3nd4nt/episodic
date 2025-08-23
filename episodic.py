@@ -380,6 +380,38 @@ def detect_episode_format(files):
     # If more than 30% of files match double episode patterns, consider it double
     return double_count >= total_files * 0.3
 
+def clean_filename(title):
+    """Clean episode title for safe filename creation"""
+    import re
+    
+    # Replace problematic characters with safe alternatives
+    replacements = {
+        '/': ' and ',
+        '\\': ' and ',
+        ':': ' - ',
+        '*': '',
+        '?': '',
+        '"': '',
+        '<': '',
+        '>': '',
+        '|': ' - ',
+        '+': ' and ',
+        '&': ' and ',
+    }
+    
+    # Apply replacements
+    for char, replacement in replacements.items():
+        title = title.replace(char, replacement)
+    
+    # Remove multiple spaces and dashes
+    title = re.sub(r'\s+', ' ', title)
+    title = re.sub(r'-+', '-', title)
+    
+    # Remove leading/trailing spaces and dashes
+    title = title.strip(' -')
+    
+    return title
+
 def generate_mapping(files, titles, double=False):
     mapping = {}
     ep = 1
@@ -391,14 +423,17 @@ def generate_mapping(files, titles, double=False):
             if ep + 1 <= len(titles):
                 # For double episodes, use both titles in one filename
                 # Format: Episode 01-02 - Title1 + Title2
-                new_name = f"Episode {ep:02d}-{ep+1:02d} - {titles[ep-1]} + {titles[ep]}{ext}"
+                title1 = clean_filename(titles[ep-1])
+                title2 = clean_filename(titles[ep])
+                new_name = f"Episode {ep:02d}-{ep+1:02d} - {title1} and {title2}{ext}"
                 ep += 2
             else:
                 new_name = ""
             mapping[f] = new_name
         else:
             if ep <= len(titles):
-                new_name = f"Episode {ep:02d} - {titles[ep-1]}{ext}"
+                title = clean_filename(titles[ep-1])
+                new_name = f"Episode {ep:02d} - {title}{ext}"
                 ep += 1
             else:
                 new_name = ""
@@ -457,6 +492,7 @@ def load_config(config_path):
 def apply_mapping(mapping, folder):
     success_count = 0
     skip_count = 0
+    error_count = 0
     
     for old, new in mapping.items():
         if not new:
@@ -469,10 +505,12 @@ def apply_mapping(mapping, folder):
         
         if not os.path.exists(old_path):
             error_echo(f"❌ File not found: {old}")
+            error_count += 1
             continue
         
         if os.path.exists(new_path):
             error_echo(f"❌ File already exists: {new}")
+            error_count += 1
             continue
         
         try:
@@ -481,8 +519,24 @@ def apply_mapping(mapping, folder):
             success_count += 1
         except OSError as e:
             error_echo(f"❌ Error renaming {old}: {e}")
+            error_count += 1
+        except Exception as e:
+            error_echo(f"❌ Unexpected error renaming {old}: {e}")
+            error_count += 1
     
-    success_echo(f"\n✅ Done! Renamed: {success_count}, skipped: {skip_count}")
+    # Summary with better formatting
+    click.echo()
+    if success_count > 0:
+        success_echo(f"✅ Successfully renamed: {success_count} files")
+    if skip_count > 0:
+        warning_echo(f"⚠️ Skipped: {skip_count} files")
+    if error_count > 0:
+        error_echo(f"❌ Errors: {error_count} files")
+    
+    if error_count == 0 and success_count > 0:
+        success_echo("🎉 All files processed successfully!")
+    elif error_count > 0:
+        warning_echo("💡 Some files had issues. Check the errors above.")
 
 def preview_changes(mapping):
     highlight_echo("\n📋 Proposed changes:")

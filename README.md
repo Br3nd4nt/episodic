@@ -142,6 +142,7 @@ Edit the file and run with `--config` parameter.
 - 🎯 **Auto-clear screen** for better UX
 - ⚠️ **Warnings and errors** with color indication
 - 🔍 **Detailed diagnostics** in verbose mode
+- 🧹 **Safe filename generation** - automatically cleans special characters
 
 ## 🔧 Auto-detection
 
@@ -152,6 +153,20 @@ Edit the file and run with `--config` parameter.
 ### Double Episodes
 - `S01E01E02`, `E01E02`, `1x01-02`
 - `Ep01-02`, `Episode01-02`
+
+## 🧹 Safe Filename Generation
+
+The tool automatically cleans episode titles to create safe filenames:
+
+- `/` and `\` → ` and `
+- `:` → ` - `
+- `*`, `?`, `"`, `<`, `>` → removed
+- `+` and `&` → ` and `
+- Multiple spaces/dashes → single space/dash
+
+**Example:**
+- Original: `Love And+Or Marriage`
+- Cleaned: `Love And and Or Marriage`
 
 ## 📋 Usage Examples
 
@@ -195,6 +210,11 @@ episodic -p ~/Videos/Show -s "Your Show" -n 1 -v
 - Use preview mode (`-v`)
 - Edit configuration file manually
 - Check double episodes format
+
+### Problem: File renaming errors
+- Special characters in episode titles are automatically cleaned
+- Check if target filename already exists
+- Ensure you have write permissions in the folder
 
 ## 🤝 Contributing
 
