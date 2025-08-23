@@ -383,9 +383,9 @@ Automatically rename TV series files using episode titles from IMDB.
 Examples:\n
     episodic -p /path/to/episodes -s "Breaking Bad" -n 1\n
     episodic -p /path/to/episodes -s "Breaking Bad" -n 1 -d\n
-    episodic -p /path/to/episodes -s "Breaking Bad"  # Auto-detect season\n
-    episodic -p /path/to/series -s "Breaking Bad" --all-seasons  # Process all seasons\n
-    episodic -p /path/to/series -s "Breaking Bad" -n 2  # Specific season\n
+    episodic -p /path/to/episodes -s "Breaking Bad"\n
+    episodic -p /path/to/series -s "Breaking Bad" --all-seasons\n
+    episodic -p /path/to/series -s "Breaking Bad" -n 2\n
     episodic -p /path/to/episodes -c rename_config.txt\n
     episodic -p /path/to/episodes -s "Breaking Bad" --save-config my_config.txt\n
 """
