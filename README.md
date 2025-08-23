@@ -88,6 +88,16 @@ episodic -p /path/to/series --rename-folders
 episodic -p /path/to/series -s "Breaking Bad" --rename-folders --all-seasons
 ```
 
+### Season Selection
+
+```bash
+# Skip specific seasons during processing
+episodic -p /path/to/series -s "Breaking Bad" --all-seasons --skip-seasons "1,3,5"
+
+# Process only specific seasons (use skip to exclude others)
+episodic -p /path/to/series -s "Breaking Bad" --all-seasons --skip-seasons "2,4,6,7,8"
+```
+
 ### Additional Options
 
 ```bash
@@ -99,6 +109,9 @@ episodic -p /path/to/episodes -s "Breaking Bad" -n 1 --yes
 
 # Rename season folders to standard format
 episodic -p /path/to/series --rename-folders
+
+# Skip specific seasons during processing
+episodic -p /path/to/series -s "Breaking Bad" --all-seasons --skip-seasons "1,3,5"
 
 # Help
 episodic -h
@@ -161,6 +174,7 @@ Edit the file and run with `--config` parameter.
 - 🧹 **Safe filename generation** - automatically cleans special characters
 - 🤖 **Auto-confirm mode** - skip prompts with `--yes` flag
 - 📁 **Season folder standardization** - rename folders to "Season 1, Season 2, etc."
+- ⏭️ **Season selection** - skip specific seasons with `--skip-seasons`
 
 ## 🔧 Auto-detection
 
@@ -173,6 +187,11 @@ The tool can detect and standardize various season folder formats:
 - `S01`, `S1` → `Season 1`
 - `Season 1`, `Season01` → `Season 1`
 - `1`, `01` → `Season 1`
+
+### Season Selection Format
+Use comma-separated numbers to specify which seasons to skip:
+- `--skip-seasons "1,3,5"` - skip seasons 1, 3, and 5
+- `--skip-seasons "2,4,6,7,8"` - skip seasons 2, 4, 6, 7, and 8
 
 ### Double Episodes
 - `S01E01E02`, `E01E02`, `1x01-02`
@@ -236,6 +255,15 @@ episodic -p ~/Videos/Series --rename-folders
 episodic -p ~/Videos/Series -s "Breaking Bad" --rename-folders --all-seasons --yes
 ```
 
+### Example 7: Season Selection
+```bash
+# Skip specific seasons (1, 3, 5)
+episodic -p ~/Videos/Series -s "Breaking Bad" --all-seasons --skip-seasons "1,3,5"
+
+# Process only seasons 2 and 4 (skip others)
+episodic -p ~/Videos/Series -s "Breaking Bad" --all-seasons --skip-seasons "1,3,5,6,7,8"
+```
+
 ## 🐛 Troubleshooting
 
 ### Problem: Show not found on IMDB
@@ -265,6 +293,10 @@ episodic -p ~/Videos/Series -s "Breaking Bad" --rename-folders --all-seasons --y
 ### Problem: Inconsistent season folder names
 - Use `--rename-folders` to standardize folder names
 - Supports various formats: S01, Season 1, 1, etc.
+
+### Problem: Need to process only specific seasons
+- Use `--skip-seasons` to exclude unwanted seasons
+- Format: `--skip-seasons "1,3,5"` (comma-separated numbers)
 
 ## 🤝 Contributing
 

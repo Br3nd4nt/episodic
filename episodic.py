@@ -313,6 +313,20 @@ def detect_season_from_folder_name(folder_name):
     
     return None
 
+def parse_skip_seasons(skip_seasons_str):
+    """Parse comma-separated list of season numbers to skip"""
+    if not skip_seasons_str:
+        return set()
+    
+    try:
+        # Split by comma and convert to integers
+        skip_list = [int(s.strip()) for s in skip_seasons_str.split(',') if s.strip()]
+        return set(skip_list)
+    except ValueError:
+        warning_echo(f"⚠️ Invalid skip-seasons format: {skip_seasons_str}")
+        warning_echo("💡 Use comma-separated numbers (e.g., '1,3,5')")
+        return set()
+
 def rename_season_folders(series_path, yes=False):
     """Rename season folders to standard format (Season 1, Season 2, etc.)"""
     if not os.path.exists(series_path):
@@ -638,8 +652,9 @@ def preview_changes(mapping):
 @click.option('--verbose', is_flag=True, help='Show detailed output for all operations')
 @click.option('--yes', is_flag=True, help='Automatically confirm all rename operations without prompting')
 @click.option('--rename-folders', is_flag=True, help='Rename season folders to standard format (Season 1, Season 2, etc.)')
+@click.option('--skip-seasons', help='Comma-separated list of season numbers to skip (e.g., "1,3,5")')
 @click.version_option(version='1.0.0')
-def main(path, show, season, double, config, preview, save_config, config_file, all_seasons, verbose, yes, rename_folders):
+def main(path, show, season, double, config, preview, save_config, config_file, all_seasons, verbose, yes, rename_folders, skip_seasons):
     """episodic - TV Series File Renamer
 
     Automatically rename TV series files using episode titles from IMDB.
@@ -718,6 +733,11 @@ def main(path, show, season, double, config, preview, save_config, config_file, 
             # Process all seasons
             print_header("Processing All Seasons")
             
+            # Parse skip seasons
+            skip_seasons_set = parse_skip_seasons(skip_seasons)
+            if skip_seasons_set:
+                info_echo(f"⏭️ Will skip seasons: {', '.join(map(str, sorted(skip_seasons_set)))}")
+            
             # Find show URL once for all seasons
             show_url = find_show_on_imdb(show)
             if not show_url:
@@ -728,9 +748,15 @@ def main(path, show, season, double, config, preview, save_config, config_file, 
             total_skipped = 0
             total_seasons = len(season_mapping)
             
-            highlight_echo(f"🚀 Processing {total_seasons} seasons automatically...")
+            # Filter out seasons to skip
+            seasons_to_process = [s for s in sorted(season_mapping.keys()) if s not in skip_seasons_set]
+            if skip_seasons_set:
+                skipped_count = total_seasons - len(seasons_to_process)
+                info_echo(f"📊 Processing {len(seasons_to_process)} seasons (skipping {skipped_count})")
+            else:
+                info_echo(f"🚀 Processing {total_seasons} seasons automatically...")
             
-            for i, season_num in enumerate(sorted(season_mapping.keys()), 1):
+            for i, season_num in enumerate(seasons_to_process, 1):
                 season_info = season_mapping[season_num]
                 season_path = season_info['path']
                 season_files = season_info['files']
@@ -802,9 +828,16 @@ def main(path, show, season, double, config, preview, save_config, config_file, 
             if season_mapping:
                 # Multiple seasons found, but no specific season specified
                 info_echo("🔍 Multiple seasons found. Please specify season with -n or use --all-seasons")
+                
+                # Parse skip seasons for display
+                skip_seasons_set = parse_skip_seasons(skip_seasons)
+                
                 info_echo("Available seasons:")
                 for season_num in sorted(season_mapping.keys()):
-                    highlight_echo(f"   -n {season_num}")
+                    if season_num in skip_seasons_set:
+                        warning_echo(f"   -n {season_num} (will be skipped)")
+                    else:
+                        highlight_echo(f"   -n {season_num}")
                 return
             else:
                 # Single season, auto-detect from file names
@@ -816,6 +849,12 @@ def main(path, show, season, double, config, preview, save_config, config_file, 
                     error_echo("❌ Could not auto-detect season. Please specify with -n")
                     return
         else:
+            # Check if specified season should be skipped
+            skip_seasons_set = parse_skip_seasons(skip_seasons)
+            if season in skip_seasons_set:
+                warning_echo(f"⏭️ Season {season} is in skip list, exiting.")
+                return
+            
             highlight_echo(f"📺 Using specified season: {season}")
             
             # If we have season mapping, get files from specific season
