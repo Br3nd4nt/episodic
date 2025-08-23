@@ -6,15 +6,95 @@ import requests
 from urllib.parse import quote
 from bs4 import BeautifulSoup
 import click
+import time
+import sys
+
+# Color support
+try:
+    from colorama import init, Fore, Back, Style
+    init(autoreset=True)
+    COLORS_AVAILABLE = True
+except ImportError:
+    COLORS_AVAILABLE = False
+    # Fallback colors for terminals that support ANSI
+    class Fore:
+        RED = '\033[91m'
+        GREEN = '\033[92m'
+        YELLOW = '\033[93m'
+        BLUE = '\033[94m'
+        MAGENTA = '\033[95m'
+        CYAN = '\033[96m'
+        WHITE = '\033[97m'
+        RESET = '\033[0m'
+    
+    class Back:
+        RED = '\033[101m'
+        GREEN = '\033[102m'
+        YELLOW = '\033[103m'
+        BLUE = '\033[104m'
+        MAGENTA = '\033[105m'
+        CYAN = '\033[106m'
+        WHITE = '\033[107m'
+        RESET = '\033[0m'
+    
+    class Style:
+        BRIGHT = '\033[1m'
+        DIM = '\033[2m'
+        NORMAL = '\033[22m'
+        RESET_ALL = '\033[0m'
 
 CONFIG_FILENAME = "rename_config.txt"
 SUPPORTED_EXTENSIONS = {'.mkv', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm'}
 
-def get_episode_titles(show, season):
+def clear_screen():
+    """Clear the terminal screen"""
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+def print_header(title):
+    """Print a beautiful header"""
+    click.echo(f"{Fore.CYAN}{Style.BRIGHT}{'=' * 60}{Style.RESET_ALL}")
+    click.echo(f"{Fore.YELLOW}{Style.BRIGHT}🎬 {title}{Style.RESET_ALL}")
+    click.echo(f"{Fore.CYAN}{Style.BRIGHT}{'=' * 60}{Style.RESET_ALL}")
+
+def print_progress(current, total, prefix="Progress"):
+    """Print a progress bar"""
+    bar_length = 30
+    filled_length = int(bar_length * current // total)
+    bar = f"{Fore.GREEN}{'█' * filled_length}{Style.RESET_ALL}{Fore.WHITE}{'░' * (bar_length - filled_length)}{Style.RESET_ALL}"
+    click.echo(f'\r{Fore.BLUE}{prefix}{Style.RESET_ALL}: [{bar}] {current}/{total} ({current/total*100:.1f}%)', nl=False)
+    if current == total:
+        click.echo()  # New line when complete
+
+def colored_echo(message, color=Fore.WHITE, style=Style.NORMAL):
+    """Print colored message"""
+    click.echo(f"{color}{style}{message}{Style.RESET_ALL}")
+
+def success_echo(message):
+    """Print success message in green"""
+    colored_echo(message, Fore.GREEN, Style.BRIGHT)
+
+def error_echo(message):
+    """Print error message in red"""
+    colored_echo(message, Fore.RED, Style.BRIGHT)
+
+def warning_echo(message):
+    """Print warning message in yellow"""
+    colored_echo(message, Fore.YELLOW, Style.BRIGHT)
+
+def info_echo(message):
+    """Print info message in blue"""
+    colored_echo(message, Fore.BLUE, Style.BRIGHT)
+
+def highlight_echo(message):
+    """Print highlighted message in cyan"""
+    colored_echo(message, Fore.CYAN, Style.BRIGHT)
+
+def find_show_on_imdb(show):
+    """Find show URL on IMDB"""
     search_url = f"https://www.imdb.com/find/?q={quote(show)}&s=tt&ttype=tv"
     
     try:
-        click.echo(f"🔍 Searching for '{show}' on IMDB...")
+        info_echo(f"🔍 Searching for '{show}' on IMDB...")
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -37,11 +117,11 @@ def get_episode_titles(show, season):
         )
         
         if not results:
-            click.echo("❌ No search results found")
-            click.echo("🔧 Try a different show name or check spelling")
-            return []
+            error_echo("❌ No search results found")
+            warning_echo("🔧 Try a different show name or check spelling")
+            return None
         
-        click.echo(f"🔍 Found {len(results)} search results")
+        info_echo(f"🔍 Found {len(results)} search results")
         
         show_url = None
         for result in results[:5]:  # Check more results
@@ -64,16 +144,31 @@ def get_episode_titles(show, season):
                     if "?" in show_url:
                         show_url = show_url.split("?")[0]
                     
-                    click.echo(f"✅ Found show: {show_url}")
-                    break
+                    success_echo(f"✅ Found show: {show_url}")
+                    return show_url
         
-        if not show_url:
-            click.echo("❌ No valid show found in results")
-            return []
+        error_echo("❌ No valid show found in results")
+        return None
         
+    except Exception as e:
+        error_echo(f"❌ Error searching IMDB: {e}")
+        return None
+
+def get_episode_titles(show_url, season):
+    """Get episode titles for a specific season using existing show URL"""
+    try:
         # Get episodes for the season
         episodes_url = f"{show_url}episodes/?season={season}"
         click.echo(f"🔍 Getting episodes for season {season}...")
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+        }
         
         response = requests.get(episodes_url, headers=headers, timeout=15)
         response.raise_for_status()
@@ -127,18 +222,18 @@ def get_episode_titles(show, season):
                             titles.append(title)
         
         if titles:
-            click.echo(f"✅ Found {len(titles)} episode titles")
+            success_echo(f"✅ Found {len(titles)} episode titles")
             return titles[:50]  # Limit to reasonable number
         else:
-            click.echo("❌ No episodes found for this season")
-            click.echo("🔧 Try checking if the season number is correct")
+            error_echo("❌ No episodes found for this season")
+            warning_echo("🔧 Try checking if the season number is correct")
             return []
             
     except requests.RequestException as e:
-        click.echo(f"❌ Network error: {e}")
+        error_echo(f"❌ Network error: {e}")
         return []
     except Exception as e:
-        click.echo(f"❌ Parsing error: {e}")
+        error_echo(f"❌ Parsing error: {e}")
         return []
 
 def get_video_files(folder_path):
@@ -195,6 +290,10 @@ def get_all_episodes_from_series(series_path):
                 }
                 all_files.extend(files)
     
+    # If no valid season folders found, treat as single season
+    if not season_mapping:
+        return get_video_files(series_path), None
+    
     return all_files, season_mapping
 
 def detect_season_from_folder_name(folder_name):
@@ -202,7 +301,7 @@ def detect_season_from_folder_name(folder_name):
     season_patterns = [
         r'S(\d{1,2})',           # S01, S1, S12
         r'Season\s*(\d{1,2})',   # Season 1, Season01
-        r'(\d{1,2})',            # 1, 01, 12
+        r'^(\d{1,2})$',          # 1, 01, 12 (exact match only)
     ]
     
     for pattern in season_patterns:
@@ -250,6 +349,37 @@ def detect_season_from_files(files):
     
     return None
 
+def detect_episode_format(files):
+    """Auto-detect if episodes are double (one file = two episodes)"""
+    if not files:
+        return False
+    
+    # Patterns that suggest double episodes
+    double_patterns = [
+        r'S\d{1,2}E(\d{1,2})E(\d{1,2})', # S03E01E02 (most specific first)
+        r'E(\d{1,2})E(\d{1,2})',     # E01E02
+        r'E(\d{1,2})-E(\d{1,2})',    # E01-E02
+        r'(\d{1,2})x(\d{1,2})',      # 1x01-02
+        r'(\d{1,2})-(\d{1,2})',      # 1-01-02
+        r'Ep(\d{1,2})-(\d{1,2})',    # Ep01-02
+        r'Episode(\d{1,2})-(\d{1,2})', # Episode01-02
+        r'ep(\d{1,2})-E(\d{1,2})',   # ep1-E02
+        r'(\d{1,2})-E(\d{1,2})',     # 1-E02
+        # Removed (\d{1,2})E(\d{1,2}) as it's too generic and matches S06E01
+    ]
+    
+    double_count = 0
+    total_files = len(files)
+    
+    for filename in files:
+        for pattern in double_patterns:
+            if re.search(pattern, filename, re.IGNORECASE):
+                double_count += 1
+                break
+    
+    # If more than 30% of files match double episode patterns, consider it double
+    return double_count >= total_files * 0.3
+
 def generate_mapping(files, titles, double=False):
     mapping = {}
     ep = 1
@@ -258,7 +388,9 @@ def generate_mapping(files, titles, double=False):
         ext = os.path.splitext(f)[1]
         
         if double:
-            if ep < len(titles):
+            if ep + 1 <= len(titles):
+                # For double episodes, use both titles in one filename
+                # Format: Episode 01-02 - Title1 + Title2
                 new_name = f"Episode {ep:02d}-{ep+1:02d} - {titles[ep-1]} + {titles[ep]}{ext}"
                 ep += 2
             else:
@@ -287,16 +419,17 @@ def dump_config(mapping, path, filename=None):
         for old, new in mapping.items():
             f.write(f"{old} -> {new}\n")
     
-    if filename == CONFIG_FILENAME:
-        click.echo(f"⚠️ Not enough titles. Config saved to {cfg_path}")
-        click.echo("📝 Edit the file and run again with -c")
+    # Check if this is a save-config operation (filename is not None) vs auto-save due to missing titles
+    if filename is not None:
+        success_echo(f"💾 Configuration saved to: {cfg_path}")
+        info_echo(f"📝 Edit the file and run: episodic -p {path} -c {filename}")
     else:
-        click.echo(f"💾 Configuration saved to: {cfg_path}")
-        click.echo(f"📝 Edit the file and run: episodic -p {path} -c {filename}")
+        warning_echo(f"⚠️ Not enough titles. Config saved to {cfg_path}")
+        info_echo("📝 Edit the file and run again with -c")
 
 def load_config(config_path):
     if not os.path.exists(config_path):
-        click.echo(f"❌ Config file not found: {config_path}")
+        error_echo(f"❌ Config file not found: {config_path}")
         return {}
     
     mapping = {}
@@ -307,12 +440,12 @@ def load_config(config_path):
                 continue
             
             if "->" not in line:
-                click.echo(f"⚠️ Skipped line {line_num}: wrong format")
+                warning_echo(f"⚠️ Skipped line {line_num}: wrong format")
                 continue
             
             parts = line.split("->", 1)
             if len(parts) != 2:
-                click.echo(f"⚠️ Skipped line {line_num}: wrong format")
+                warning_echo(f"⚠️ Skipped line {line_num}: wrong format")
                 continue
             
             old = parts[0].strip()
@@ -327,7 +460,7 @@ def apply_mapping(mapping, folder):
     
     for old, new in mapping.items():
         if not new:
-            click.echo(f"⚠️ Skipped: {old} (no new name)")
+            warning_echo(f"⚠️ Skipped: {old} (no new name)")
             skip_count += 1
             continue
         
@@ -335,60 +468,73 @@ def apply_mapping(mapping, folder):
         new_path = os.path.join(folder, new)
         
         if not os.path.exists(old_path):
-            click.echo(f"❌ File not found: {old}")
+            error_echo(f"❌ File not found: {old}")
             continue
         
         if os.path.exists(new_path):
-            click.echo(f"❌ File already exists: {new}")
+            error_echo(f"❌ File already exists: {new}")
             continue
         
         try:
-            click.echo(f"📝 {old} -> {new}")
+            info_echo(f"📝 {old} -> {new}")
             os.rename(old_path, new_path)
             success_count += 1
         except OSError as e:
-            click.echo(f"❌ Error renaming {old}: {e}")
+            error_echo(f"❌ Error renaming {old}: {e}")
     
-    click.echo(f"\n✅ Done! Renamed: {success_count}, skipped: {skip_count}")
+    success_echo(f"\n✅ Done! Renamed: {success_count}, skipped: {skip_count}")
 
 def preview_changes(mapping):
-    click.echo("\n📋 Proposed changes:")
-    click.echo("-" * 60)
+    highlight_echo("\n📋 Proposed changes:")
+    click.echo(f"{Fore.CYAN}{'-' * 60}{Style.RESET_ALL}")
     
     for old, new in mapping.items():
         if not new:
-            click.echo(f"⚠️  {old} -> SKIPPED")
+            warning_echo(f"⚠️  {old} -> SKIPPED")
         else:
-            click.echo(f"📝  {old}")
-            click.echo(f"    -> {new}")
+            info_echo(f"📝  {old}")
+            success_echo(f"    -> {new}")
         click.echo()
     
-    click.echo("-" * 60)
+    click.echo(f"{Fore.CYAN}{'-' * 60}{Style.RESET_ALL}")
 
-@click.command(context_settings=dict(help_option_names=['-h', '--help']))
-@click.option('-p', '--path', required=True, help='Path to folder with episodes')
+@click.command(
+    name='episodic',
+    context_settings=dict(help_option_names=['-h', '--help']),
+    help='Automatically rename TV series files using episode titles from IMDB.'
+)
+@click.option('-p', '--path', default='.', help='Path to folder with episodes (default: current directory)')
 @click.option('-s', '--show', help='Show name (as on IMDB)')
-@click.option('-n', '--season', type=int, help='Season number (auto-detected if not specified, or "all" for all seasons)')
-@click.option('-d', '--double', is_flag=True, help='Flag for double episodes (one file = two episodes)')
+@click.option('-n', '--season', type=int, help='Season number (auto-detected if not specified)')
+@click.option('-d', '--double', is_flag=True, default=None, help='Force double episodes format (auto-detected if not specified)')
 @click.option('-c', '--config', help='Use existing config file for renaming')
 @click.option('-v', '--preview', is_flag=True, help='Only show changes without applying')
-@click.option('--save-config', help='Save configuration to file without applying changes')
+@click.option('--save-config', is_flag=True, help='Save configuration to file without applying changes')
+@click.option('--config-file', default='rename_config.txt', help='Configuration filename (default: rename_config.txt)')
 @click.option('--all-seasons', is_flag=True, help='Process all seasons automatically')
+@click.option('--verbose', is_flag=True, help='Show detailed output for all operations')
 @click.version_option(version='1.0.0')
-def main(path, show, season, double, config, preview, save_config, all_seasons):
+def main(path, show, season, double, config, preview, save_config, config_file, all_seasons, verbose):
     """episodic - TV Series File Renamer
 
-Automatically rename TV series files using episode titles from IMDB.
+    Automatically rename TV series files using episode titles from IMDB.
 
-Examples:\n
-    episodic -p /path/to/episodes -s "Breaking Bad" -n 1\n
-    episodic -p /path/to/episodes -s "Breaking Bad" -n 1 -d\n
-    episodic -p /path/to/episodes -s "Breaking Bad"\n
-    episodic -p /path/to/series -s "Breaking Bad" --all-seasons\n
-    episodic -p /path/to/series -s "Breaking Bad" -n 2\n
-    episodic -p /path/to/episodes -c rename_config.txt\n
-    episodic -p /path/to/episodes -s "Breaking Bad" --save-config my_config.txt\n
-"""
+    Examples:
+        episodic -s "Breaking Bad" -n 1                    # Use current directory
+        episodic -p /path/to/episodes -s "Breaking Bad" -n 1
+        episodic -s "Breaking Bad" -n 1 -d                 # Double episodes
+        episodic -p /path/to/episodes -s "Breaking Bad" -n 1 -d
+        episodic -s "Breaking Bad"                          # Auto-detect season
+        episodic -p /path/to/episodes -s "Breaking Bad"
+        episodic -s "Breaking Bad" --all-seasons           # Process all seasons
+        episodic -p /path/to/series -s "Breaking Bad" --all-seasons
+        episodic -s "Breaking Bad" -n 2                    # Specific season
+        episodic -p /path/to/series -s "Breaking Bad" -n 2
+        episodic -c rename_config.txt                       # Use config file
+        episodic -p /path/to/episodes -c rename_config.txt
+        episodic -s "Breaking Bad" --save-config           # Save config only
+        episodic -p /path/to/episodes -s "Breaking Bad" --save-config
+    """
     
     # Check if this is a series folder with multiple seasons
     all_files, season_mapping = get_all_episodes_from_series(path)
@@ -399,15 +545,15 @@ Examples:\n
     
     if season_mapping:
         # Multiple seasons found
-        click.echo(f"📺 Found {len(season_mapping)} season folders:")
+        highlight_echo(f"📺 Found {len(season_mapping)} season folders:")
         for season_num in sorted(season_mapping.keys()):
             season_info = season_mapping[season_num]
-            click.echo(f"   Season {season_num}: {len(season_info['files'])} episodes")
-        click.echo(f"📁 Total: {len(all_files)} episodes")
+            info_echo(f"   Season {season_num}: {len(season_info['files'])} episodes")
+        info_echo(f"📁 Total: {len(all_files)} episodes")
     else:
         # Single season or flat structure
-        files = get_video_files(path)
-        click.echo(f"📁 Found {len(files)} video files in single folder")
+        files = all_files  # Use files already found by get_all_episodes_from_series
+        info_echo(f"📁 Found {len(files)} video files in single folder")
 
     if config:
         mapping = load_config(config)
@@ -416,7 +562,7 @@ Examples:\n
         
         if save_config:
             # Save configuration to file
-            dump_config(mapping, path, save_config)
+            dump_config(mapping, path, config_file)
             return
         
         preview_changes(mapping)
@@ -425,110 +571,177 @@ Examples:\n
             if click.confirm("\nRename files?"):
                 apply_mapping(mapping, path)
             else:
-                click.echo("❌ Cancelled.")
+                warning_echo("❌ Cancelled.")
     else:
         if not show:
-            click.echo("❌ Need to specify --show, or --config")
+            error_echo("❌ Need to specify --show, or --config")
             return
         
         if all_seasons and season_mapping:
             # Process all seasons
-            click.echo("🚀 Processing all seasons automatically...")
+            print_header("Processing All Seasons")
+            
+            # Find show URL once for all seasons
+            show_url = find_show_on_imdb(show)
+            if not show_url:
+                error_echo("❌ Failed to find show on IMDB. Exiting.")
+                return
             
             total_renamed = 0
             total_skipped = 0
+            total_seasons = len(season_mapping)
             
-            for season_num in sorted(season_mapping.keys()):
+            highlight_echo(f"🚀 Processing {total_seasons} seasons automatically...")
+            
+            for i, season_num in enumerate(sorted(season_mapping.keys()), 1):
                 season_info = season_mapping[season_num]
                 season_path = season_info['path']
                 season_files = season_info['files']
                 
-                click.echo(f"\n📺 Processing Season {season_num}...")
+                # Clear screen for interactive experience
+                if not verbose:
+                    clear_screen()
+                    print_header(f"Processing Season {season_num}")
+                    print_progress(i, total_seasons, "Seasons")
                 
-                titles = get_episode_titles(show, season_num)
+                info_echo(f"\n📺 Processing Season {season_num}...")
+                
+                # Auto-detect episode format for this season
+                season_double = detect_episode_format(season_files)
+                if season_double:
+                    highlight_echo(f"🎬 Detected double episodes format for Season {season_num}")
+                else:
+                    highlight_echo(f"🎬 Detected single episodes format for Season {season_num}")
+                
+                titles = get_episode_titles(show_url, season_num)
                 if not titles:
-                    click.echo(f"⚠️ Skipping season {season_num} - no titles found")
+                    warning_echo(f"⚠️ Skipping season {season_num} - no titles found")
                     continue
                 
-                mapping = generate_mapping(season_files, titles, double)
+                # Use season-specific format detection, but allow manual override
+                use_double = double if double is not None else season_double
+                mapping = generate_mapping(season_files, titles, use_double)
                 
                 if save_config:
-                    config_filename = f"season_{season_num}_config.txt"
+                    # Use config_file for filename
+                    config_filename = f"season_{season_num}_{config_file}"
                     dump_config(mapping, season_path, config_filename)
+                    
+                    if verbose:
+                        success_echo(f"💾 Configuration saved for Season {season_num}")
                     continue
                 
                 if preview:
-                    preview_changes(mapping)
+                    if verbose:
+                        preview_changes(mapping)
                 else:
                     if click.confirm(f"Rename files in Season {season_num}?"):
                         apply_mapping(mapping, season_path)
                         total_renamed += sum(1 for new in mapping.values() if new)
                         total_skipped += sum(1 for new in mapping.values() if not new)
                     else:
-                        click.echo(f"❌ Skipped Season {season_num}")
+                        warning_echo(f"❌ Skipped Season {season_num}")
+                
+                # Small delay for better UX
+                if not verbose:
+                    time.sleep(0.5)
             
             if not preview and not save_config:
-                click.echo(f"\n🎉 All seasons processed! Total renamed: {total_renamed}, skipped: {total_skipped}")
+                success_echo(f"\n🎉 All seasons processed!")
+                info_echo(f"📊 Total renamed: {total_renamed}, skipped: {total_skipped}")
+            
+            # Final cleanup - clear screen and show summary
+            if not verbose:
+                clear_screen()
+                print_header("Processing Complete")
+                success_echo(f"🎉 All {total_seasons} seasons processed successfully!")
+                info_echo(f"📊 Total renamed: {total_renamed}, skipped: {total_skipped}")
+                if save_config:
+                    success_echo("💾 All configurations saved to respective season folders")
             return
         
         # Single season processing
         if not season:
             if season_mapping:
                 # Multiple seasons found, but no specific season specified
-                click.echo("🔍 Multiple seasons found. Please specify season with -n or use --all-seasons")
-                click.echo("Available seasons:")
+                info_echo("🔍 Multiple seasons found. Please specify season with -n or use --all-seasons")
+                info_echo("Available seasons:")
                 for season_num in sorted(season_mapping.keys()):
-                    click.echo(f"   -n {season_num}")
+                    highlight_echo(f"   -n {season_num}")
                 return
             else:
                 # Single season, auto-detect from file names
-                click.echo("🔍 Auto-detecting season number from file names...")
+                info_echo("🔍 Auto-detecting season number from file names...")
                 season = detect_season_from_files(files)
                 if season:
-                    click.echo(f"✅ Detected season {season}")
+                    success_echo(f"✅ Detected season {season}")
                 else:
-                    click.echo("❌ Could not auto-detect season. Please specify with -n")
+                    error_echo("❌ Could not auto-detect season. Please specify with -n")
                     return
         else:
-            click.echo(f"📺 Using specified season: {season}")
+            highlight_echo(f"📺 Using specified season: {season}")
             
             # If we have season mapping, get files from specific season
             if season_mapping and season in season_mapping:
                 season_info = season_mapping[season]
                 files = season_info['files']
                 season_path = season_info['path']
-                click.echo(f"📁 Using files from Season {season} folder")
+                info_echo(f"📁 Using files from Season {season} folder")
+                
+                # Auto-detect episode format for this season
+                season_double = detect_episode_format(files)
+                if season_double:
+                    highlight_echo(f"🎬 Detected double episodes format for Season {season}")
+                else:
+                    highlight_echo(f"🎬 Detected single episodes format for Season {season}")
+                
+                # Use season-specific format detection, but allow manual override
+                use_double = double if double is not None else season_double
             elif season_mapping:
-                click.echo(f"❌ Season {season} not found. Available seasons:")
+                error_echo(f"❌ Season {season} not found. Available seasons:")
                 for season_num in sorted(season_mapping.keys()):
-                    click.echo(f"   -n {season_num}")
+                    highlight_echo(f"   -n {season_num}")
                 return
+            else:
+                # Single season mode, use manual flag
+                use_double = double
 
-        titles = get_episode_titles(show, season)
+        # Find show URL
+        show_url = find_show_on_imdb(show)
+        if not show_url:
+            error_echo("❌ Failed to find show on IMDB. Exiting.")
+            return
+        
+        titles = get_episode_titles(show_url, season)
         
         if not titles:
             return
         
-        mapping = generate_mapping(files, titles, double)
+        if verbose:
+            info_echo(f"🔍 Generating mapping with {len(files)} files, {len(titles)} titles, double={use_double}")
+        mapping = generate_mapping(files, titles, use_double)
+        if verbose:
+            info_echo(f"📝 Generated mapping with {len(mapping)} entries")
 
         missing_titles = sum(1 for new in mapping.values() if not new)
         if missing_titles > 0:
-            click.echo(f"⚠️ Missing titles for {missing_titles} files")
+            warning_echo(f"⚠️ Missing titles for {missing_titles} files")
             dump_config(mapping, path)
             return
 
         if save_config:
             # Save configuration to file
-            dump_config(mapping, path, save_config)
+            dump_config(mapping, path, config_file)
             return
 
-        preview_changes(mapping)
+        if verbose:
+            preview_changes(mapping)
         
         if not preview:
             if click.confirm("\nRename files?"):
                 apply_mapping(mapping, path)
             else:
-                click.echo("❌ Cancelled.")
+                warning_echo("❌ Cancelled.")
 
 if __name__ == "__main__":
     main()

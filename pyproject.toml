@@ -5,24 +5,29 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "episodic"
 version = "1.0.0"
-description = "TV Series File Renamer"
+description = "Automatically rename TV series files using episode titles from IMDB"
 readme = "README.md"
 license = {text = "MIT"}
-authors = [{name = "Your Name"}]
+authors = [{name = "br3nd4nt"}]
+maintainers = [{name = "br3nd4nt"}]
 requires-python = ">=3.7"
 dependencies = [
     "click>=8.0.0",
     "requests>=2.31.0",
     "beautifulsoup4>=4.12.0",
     "lxml>=4.9.0",
+    "colorama>=0.4.6",
 ]
-keywords = ["tv", "series", "rename", "imdb", "episodes"]
+keywords = ["tv", "series", "rename", "imdb", "episodes", "video", "files", "automation"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
@@ -33,6 +38,7 @@ classifiers = [
     "Topic :: Multimedia :: Video",
     "Topic :: System :: Filesystems",
     "Topic :: Utilities",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
 ]
 
 [project.scripts]
