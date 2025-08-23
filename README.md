@@ -78,6 +78,16 @@ episodic -p /path/to/episodes -c rename_config.txt
 episodic -p /path/to/episodes -s "Breaking Bad" --save-config my_config.txt
 ```
 
+### Season Folder Management
+
+```bash
+# Rename season folders to standard format (Season 1, Season 2, etc.)
+episodic -p /path/to/series --rename-folders
+
+# Rename folders and process episodes in one command
+episodic -p /path/to/series -s "Breaking Bad" --rename-folders --all-seasons
+```
+
 ### Additional Options
 
 ```bash
@@ -86,6 +96,9 @@ episodic -p /path/to/episodes -s "Breaking Bad" -n 1 --verbose
 
 # Auto-confirm all operations (no prompts)
 episodic -p /path/to/episodes -s "Breaking Bad" -n 1 --yes
+
+# Rename season folders to standard format
+episodic -p /path/to/series --rename-folders
 
 # Help
 episodic -h
@@ -147,12 +160,19 @@ Edit the file and run with `--config` parameter.
 - 🔍 **Detailed diagnostics** in verbose mode
 - 🧹 **Safe filename generation** - automatically cleans special characters
 - 🤖 **Auto-confirm mode** - skip prompts with `--yes` flag
+- 📁 **Season folder standardization** - rename folders to "Season 1, Season 2, etc."
 
 ## 🔧 Auto-detection
 
 ### Seasons
 - From folder names: `Season 1`, `S01`, `1`
 - From file names: `S01E01`, `1x01`, `1.01`
+
+### Season Folder Formats
+The tool can detect and standardize various season folder formats:
+- `S01`, `S1` → `Season 1`
+- `Season 1`, `Season01` → `Season 1`
+- `1`, `01` → `Season 1`
 
 ### Double Episodes
 - `S01E01E02`, `E01E02`, `1x01-02`
@@ -207,6 +227,15 @@ episodic -p ~/Videos/Show -s "Your Show" -n 1 --yes
 episodic -p ~/Videos/Complete_Series -s "Breaking Bad" --all-seasons --yes
 ```
 
+### Example 6: Season Folder Management
+```bash
+# Rename season folders to standard format
+episodic -p ~/Videos/Series --rename-folders
+
+# Rename folders and process all episodes
+episodic -p ~/Videos/Series -s "Breaking Bad" --rename-folders --all-seasons --yes
+```
+
 ## 🐛 Troubleshooting
 
 ### Problem: Show not found on IMDB
@@ -232,6 +261,10 @@ episodic -p ~/Videos/Complete_Series -s "Breaking Bad" --all-seasons --yes
 ### Problem: Too many confirmation prompts
 - Use `--yes` flag to automatically confirm all operations
 - Perfect for batch processing or automation scripts
+
+### Problem: Inconsistent season folder names
+- Use `--rename-folders` to standardize folder names
+- Supports various formats: S01, Season 1, 1, etc.
 
 ## 🤝 Contributing
 

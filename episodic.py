@@ -313,6 +313,75 @@ def detect_season_from_folder_name(folder_name):
     
     return None
 
+def rename_season_folders(series_path, yes=False):
+    """Rename season folders to standard format (Season 1, Season 2, etc.)"""
+    if not os.path.exists(series_path):
+        error_echo(f"❌ Series path does not exist: {series_path}")
+        return False
+    
+    season_folders = get_season_folders(series_path)
+    if not season_folders:
+        info_echo("📁 No season folders found to rename")
+        return True
+    
+    rename_mapping = {}
+    
+    for folder_name in season_folders:
+        season_num = detect_season_from_folder_name(folder_name)
+        if season_num:
+            new_name = f"Season {season_num}"
+            if folder_name != new_name:
+                rename_mapping[folder_name] = new_name
+    
+    if not rename_mapping:
+        info_echo("✅ All season folders already have standard names")
+        return True
+    
+    # Show proposed changes
+    highlight_echo("\n📁 Proposed folder renames:")
+    click.echo(f"{Fore.CYAN}{'-' * 60}{Style.RESET_ALL}")
+    
+    for old_name, new_name in rename_mapping.items():
+        info_echo(f"📝  {old_name}")
+        success_echo(f"    -> {new_name}")
+        click.echo()
+    
+    click.echo(f"{Fore.CYAN}{'-' * 60}{Style.RESET_ALL}")
+    
+    # Confirm and apply
+    if yes or click.confirm("\nRename season folders?"):
+        success_count = 0
+        error_count = 0
+        
+        for old_name, new_name in rename_mapping.items():
+            old_path = os.path.join(series_path, old_name)
+            new_path = os.path.join(series_path, new_name)
+            
+            try:
+                info_echo(f"📁 {old_name} -> {new_name}")
+                os.rename(old_path, new_path)
+                success_count += 1
+            except OSError as e:
+                error_echo(f"❌ Error renaming folder {old_name}: {e}")
+                error_count += 1
+        
+        # Summary
+        click.echo()
+        if success_count > 0:
+            success_echo(f"✅ Successfully renamed: {success_count} folders")
+        if error_count > 0:
+            error_echo(f"❌ Errors: {error_count} folders")
+        
+        if error_count == 0 and success_count > 0:
+            success_echo("🎉 All season folders renamed successfully!")
+        elif error_count > 0:
+            warning_echo("💡 Some folders had issues. Check the errors above.")
+        
+        return True
+    else:
+        warning_echo("❌ Folder renaming cancelled.")
+        return False
+
 def detect_season_from_files(files):
     """Auto-detect season number from file names"""
     if not files:
@@ -568,8 +637,9 @@ def preview_changes(mapping):
 @click.option('--all-seasons', is_flag=True, help='Process all seasons automatically')
 @click.option('--verbose', is_flag=True, help='Show detailed output for all operations')
 @click.option('--yes', is_flag=True, help='Automatically confirm all rename operations without prompting')
+@click.option('--rename-folders', is_flag=True, help='Rename season folders to standard format (Season 1, Season 2, etc.)')
 @click.version_option(version='1.0.0')
-def main(path, show, season, double, config, preview, save_config, config_file, all_seasons, verbose, yes):
+def main(path, show, season, double, config, preview, save_config, config_file, all_seasons, verbose, yes, rename_folders):
     """episodic - TV Series File Renamer
 
     Automatically rename TV series files using episode titles from IMDB.
@@ -593,6 +663,14 @@ def main(path, show, season, double, config, preview, save_config, config_file, 
     
     # Check if this is a series folder with multiple seasons
     all_files, season_mapping = get_all_episodes_from_series(path)
+    
+    # Handle folder renaming if requested
+    if rename_folders:
+        print_header("Renaming Season Folders")
+        if not rename_season_folders(path, yes):
+            return
+        # Refresh season mapping after folder renaming
+        all_files, season_mapping = get_all_episodes_from_series(path)
     
     if not all_files:
         click.echo("❌ No video files found in specified folder")
@@ -628,8 +706,12 @@ def main(path, show, season, double, config, preview, save_config, config_file, 
             else:
                 warning_echo("❌ Cancelled.")
     else:
-        if not show:
-            error_echo("❌ Need to specify --show, or --config")
+        if not show and not rename_folders:
+            error_echo("❌ Need to specify --show, or --config, or --rename-folders")
+            return
+        
+        # If only rename_folders is specified, exit after folder renaming
+        if rename_folders and not show:
             return
         
         if all_seasons and season_mapping:
