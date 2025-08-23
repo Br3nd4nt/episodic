@@ -19,6 +19,12 @@ episodic -p /path/to/episodes -s "Breaking Bad" -n 1
 # Auto-detect season
 episodic -p /path/to/episodes -s "Breaking Bad"
 
+# Process all seasons in series folder
+episodic -p /path/to/series -s "Breaking Bad" --all-seasons
+
+# Specific season from series folder
+episodic -p /path/to/series -s "Breaking Bad" -n 2
+
 # Double episodes
 episodic -p /path/to/episodes -s "Breaking Bad" -n 1 -d
 

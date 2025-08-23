@@ -155,6 +155,65 @@ def get_video_files(folder_path):
     
     return sorted(files)
 
+def get_season_folders(series_path):
+    """Get list of season folders in series directory"""
+    if not os.path.exists(series_path):
+        return []
+    
+    season_folders = []
+    for item in os.listdir(series_path):
+        item_path = os.path.join(series_path, item)
+        if os.path.isdir(item_path):
+            # Check if folder name suggests it's a season
+            if any(pattern in item.lower() for pattern in ['season', 's', 'сезон']):
+                season_folders.append(item)
+    
+    return sorted(season_folders)
+
+def get_all_episodes_from_series(series_path):
+    """Get all episodes from all season folders"""
+    season_folders = get_season_folders(series_path)
+    
+    if not season_folders:
+        # If no season folders, treat as single season
+        return get_video_files(series_path), None
+    
+    all_files = []
+    season_mapping = {}
+    
+    for season_folder in season_folders:
+        season_path = os.path.join(series_path, season_folder)
+        files = get_video_files(season_path)
+        
+        if files:
+            # Detect season number from folder name
+            season_num = detect_season_from_folder_name(season_folder)
+            if season_num:
+                season_mapping[season_num] = {
+                    'path': season_path,
+                    'files': files
+                }
+                all_files.extend(files)
+    
+    return all_files, season_mapping
+
+def detect_season_from_folder_name(folder_name):
+    """Detect season number from folder name"""
+    season_patterns = [
+        r'S(\d{1,2})',           # S01, S1, S12
+        r'Season\s*(\d{1,2})',   # Season 1, Season01
+        r'(\d{1,2})',            # 1, 01, 12
+    ]
+    
+    for pattern in season_patterns:
+        match = re.search(pattern, folder_name, re.IGNORECASE)
+        if match:
+            season_num = int(match.group(1))
+            if 1 <= season_num <= 99:
+                return season_num
+    
+    return None
+
 def detect_season_from_files(files):
     """Auto-detect season number from file names"""
     if not files:
@@ -309,13 +368,14 @@ def preview_changes(mapping):
 @click.command(context_settings=dict(help_option_names=['-h', '--help']))
 @click.option('-p', '--path', required=True, help='Path to folder with episodes')
 @click.option('-s', '--show', help='Show name (as on IMDB)')
-@click.option('-n', '--season', type=int, help='Season number (auto-detected if not specified)')
+@click.option('-n', '--season', type=int, help='Season number (auto-detected if not specified, or "all" for all seasons)')
 @click.option('-d', '--double', is_flag=True, help='Flag for double episodes (one file = two episodes)')
 @click.option('-c', '--config', help='Use existing config file for renaming')
 @click.option('-v', '--preview', is_flag=True, help='Only show changes without applying')
 @click.option('--save-config', help='Save configuration to file without applying changes')
+@click.option('--all-seasons', is_flag=True, help='Process all seasons automatically')
 @click.version_option(version='1.0.0')
-def main(path, show, season, double, config, preview, save_config):
+def main(path, show, season, double, config, preview, save_config, all_seasons):
     """episodic - TV Series File Renamer
 
 Automatically rename TV series files using episode titles from IMDB.
@@ -324,16 +384,30 @@ Examples:\n
     episodic -p /path/to/episodes -s "Breaking Bad" -n 1\n
     episodic -p /path/to/episodes -s "Breaking Bad" -n 1 -d\n
     episodic -p /path/to/episodes -s "Breaking Bad"  # Auto-detect season\n
+    episodic -p /path/to/series -s "Breaking Bad" --all-seasons  # Process all seasons\n
+    episodic -p /path/to/series -s "Breaking Bad" -n 2  # Specific season\n
     episodic -p /path/to/episodes -c rename_config.txt\n
     episodic -p /path/to/episodes -s "Breaking Bad" --save-config my_config.txt\n
 """
     
-    files = get_video_files(path)
-    if not files:
+    # Check if this is a series folder with multiple seasons
+    all_files, season_mapping = get_all_episodes_from_series(path)
+    
+    if not all_files:
         click.echo("❌ No video files found in specified folder")
         return
     
-    click.echo(f"📁 Found {len(files)} video files")
+    if season_mapping:
+        # Multiple seasons found
+        click.echo(f"📺 Found {len(season_mapping)} season folders:")
+        for season_num in sorted(season_mapping.keys()):
+            season_info = season_mapping[season_num]
+            click.echo(f"   Season {season_num}: {len(season_info['files'])} episodes")
+        click.echo(f"📁 Total: {len(all_files)} episodes")
+    else:
+        # Single season or flat structure
+        files = get_video_files(path)
+        click.echo(f"📁 Found {len(files)} video files in single folder")
 
     if config:
         mapping = load_config(config)
@@ -357,17 +431,78 @@ Examples:\n
             click.echo("❌ Need to specify --show, or --config")
             return
         
-        # Auto-detect season if not specified
+        if all_seasons and season_mapping:
+            # Process all seasons
+            click.echo("🚀 Processing all seasons automatically...")
+            
+            total_renamed = 0
+            total_skipped = 0
+            
+            for season_num in sorted(season_mapping.keys()):
+                season_info = season_mapping[season_num]
+                season_path = season_info['path']
+                season_files = season_info['files']
+                
+                click.echo(f"\n📺 Processing Season {season_num}...")
+                
+                titles = get_episode_titles(show, season_num)
+                if not titles:
+                    click.echo(f"⚠️ Skipping season {season_num} - no titles found")
+                    continue
+                
+                mapping = generate_mapping(season_files, titles, double)
+                
+                if save_config:
+                    config_filename = f"season_{season_num}_config.txt"
+                    dump_config(mapping, season_path, config_filename)
+                    continue
+                
+                if preview:
+                    preview_changes(mapping)
+                else:
+                    if click.confirm(f"Rename files in Season {season_num}?"):
+                        apply_mapping(mapping, season_path)
+                        total_renamed += sum(1 for new in mapping.values() if new)
+                        total_skipped += sum(1 for new in mapping.values() if not new)
+                    else:
+                        click.echo(f"❌ Skipped Season {season_num}")
+            
+            if not preview and not save_config:
+                click.echo(f"\n🎉 All seasons processed! Total renamed: {total_renamed}, skipped: {total_skipped}")
+            return
+        
+        # Single season processing
         if not season:
-            click.echo("🔍 Auto-detecting season number from file names...")
-            season = detect_season_from_files(files)
-            if season:
-                click.echo(f"✅ Detected season {season}")
-            else:
-                click.echo("❌ Could not auto-detect season. Please specify with -n")
+            if season_mapping:
+                # Multiple seasons found, but no specific season specified
+                click.echo("🔍 Multiple seasons found. Please specify season with -n or use --all-seasons")
+                click.echo("Available seasons:")
+                for season_num in sorted(season_mapping.keys()):
+                    click.echo(f"   -n {season_num}")
                 return
+            else:
+                # Single season, auto-detect from file names
+                click.echo("🔍 Auto-detecting season number from file names...")
+                season = detect_season_from_files(files)
+                if season:
+                    click.echo(f"✅ Detected season {season}")
+                else:
+                    click.echo("❌ Could not auto-detect season. Please specify with -n")
+                    return
         else:
             click.echo(f"📺 Using specified season: {season}")
+            
+            # If we have season mapping, get files from specific season
+            if season_mapping and season in season_mapping:
+                season_info = season_mapping[season]
+                files = season_info['files']
+                season_path = season_info['path']
+                click.echo(f"📁 Using files from Season {season} folder")
+            elif season_mapping:
+                click.echo(f"❌ Season {season} not found. Available seasons:")
+                for season_num in sorted(season_mapping.keys()):
+                    click.echo(f"   -n {season_num}")
+                return
 
         titles = get_episode_titles(show, season)
         
