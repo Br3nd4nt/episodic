@@ -2,6 +2,33 @@
 
 Automatically rename TV series files using episode titles from IMDB.
 
+## Installation
+
+```bash
+pip install -e .
+```
+
+After installation, you can use `episodic` command from anywhere.
+
+## Usage
+
+```bash
+# Basic usage
+episodic -p /path/to/episodes -s "Breaking Bad" -n 1
+
+# Double episodes
+episodic -p /path/to/episodes -s "Breaking Bad" -n 1 -d
+
+# Preview only
+episodic -p /path/to/episodes -s "Breaking Bad" -n 1 -v
+
+# Use config file
+episodic -p /path/to/episodes -c rename_config.txt
+
+# Help
+episodic -h
+```
+
 ## Features
 
 - Fetch episode titles from IMDB
@@ -9,28 +36,6 @@ Automatically rename TV series files using episode titles from IMDB.
 - Manual config editing when needed
 - Preview mode
 - Multiple video formats support
-
-## Usage
-
-```bash
-# Basic usage
-python episodic.py -p /path/to/episodes -s "Breaking Bad" -n 1
-
-# Double episodes
-python episodic.py -p /path/to/episodes -s "Breaking Bad" -n 1 -d
-
-# Preview only
-python episodic.py -p /path/to/episodes -s "Breaking Bad" -n 1 --preview
-
-# Use config file
-python episodic.py -p /path/to/episodes --config rename_config.txt
-```
-
-## Installation
-
-```bash
-pip install -r requirements.txt
-```
 
 ## Output Format
 
