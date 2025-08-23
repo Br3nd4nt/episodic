@@ -16,6 +16,9 @@ After installation, you can use `episodic` command from anywhere.
 # Basic usage
 episodic -p /path/to/episodes -s "Breaking Bad" -n 1
 
+# Auto-detect season
+episodic -p /path/to/episodes -s "Breaking Bad"
+
 # Double episodes
 episodic -p /path/to/episodes -s "Breaking Bad" -n 1 -d
 
@@ -26,7 +29,7 @@ episodic -p /path/to/episodes -s "Breaking Bad" -n 1 -v
 episodic -p /path/to/episodes -c rename_config.txt
 
 # Save config without applying
-episodic -p /path/to/episodes -s "Breaking Bad" -n 1 --save-config my_config.txt
+episodic -p /path/to/episodes -s "Breaking Bad" --save-config my_config.txt
 
 # Help
 episodic -h

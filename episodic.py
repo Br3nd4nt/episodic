@@ -155,6 +155,42 @@ def get_video_files(folder_path):
     
     return sorted(files)
 
+def detect_season_from_files(files):
+    """Auto-detect season number from file names"""
+    if not files:
+        return None
+    
+    # Common patterns for season detection
+    season_patterns = [
+        r'S(\d{1,2})',           # S01, S1, S12
+        r'Season\s*(\d{1,2})',   # Season 1, Season01
+        r'(\d{1,2})x\d{1,2}',    # 1x01, 12x05
+        r'(\d{1,2})\.\d{1,2}',   # 1.01, 12.05
+        r'(\d{1,2})-\d{1,2}',    # 1-01, 12-05
+    ]
+    
+    detected_seasons = []
+    
+    for filename in files:
+        for pattern in season_patterns:
+            match = re.search(pattern, filename, re.IGNORECASE)
+            if match:
+                season_num = int(match.group(1))
+                if 1 <= season_num <= 99:  # Reasonable season range
+                    detected_seasons.append(season_num)
+                break
+    
+    if detected_seasons:
+        # Return most common season number
+        from collections import Counter
+        season_counts = Counter(detected_seasons)
+        most_common = season_counts.most_common(1)[0]
+        
+        if most_common[1] >= len(files) * 0.5:  # At least 50% of files match
+            return most_common[0]
+    
+    return None
+
 def generate_mapping(files, titles, double=False):
     mapping = {}
     ep = 1
@@ -273,7 +309,7 @@ def preview_changes(mapping):
 @click.command(context_settings=dict(help_option_names=['-h', '--help']))
 @click.option('-p', '--path', required=True, help='Path to folder with episodes')
 @click.option('-s', '--show', help='Show name (as on IMDB)')
-@click.option('-n', '--season', type=int, help='Season number')
+@click.option('-n', '--season', type=int, help='Season number (auto-detected if not specified)')
 @click.option('-d', '--double', is_flag=True, help='Flag for double episodes (one file = two episodes)')
 @click.option('-c', '--config', help='Use existing config file for renaming')
 @click.option('-v', '--preview', is_flag=True, help='Only show changes without applying')
@@ -287,8 +323,9 @@ Automatically rename TV series files using episode titles from IMDB.
 Examples:\n
     episodic -p /path/to/episodes -s "Breaking Bad" -n 1\n
     episodic -p /path/to/episodes -s "Breaking Bad" -n 1 -d\n
+    episodic -p /path/to/episodes -s "Breaking Bad"  # Auto-detect season\n
     episodic -p /path/to/episodes -c rename_config.txt\n
-    episodic -p /path/to/episodes -s "Breaking Bad" -n 1 --save-config my_config.txt\n
+    episodic -p /path/to/episodes -s "Breaking Bad" --save-config my_config.txt\n
 """
     
     files = get_video_files(path)
@@ -316,9 +353,21 @@ Examples:\n
             else:
                 click.echo("❌ Cancelled.")
     else:
-        if not show or not season:
-            click.echo("❌ Need to specify --show and --season, or --config")
+        if not show:
+            click.echo("❌ Need to specify --show, or --config")
             return
+        
+        # Auto-detect season if not specified
+        if not season:
+            click.echo("🔍 Auto-detecting season number from file names...")
+            season = detect_season_from_files(files)
+            if season:
+                click.echo(f"✅ Detected season {season}")
+            else:
+                click.echo("❌ Could not auto-detect season. Please specify with -n")
+                return
+        else:
+            click.echo(f"📺 Using specified season: {season}")
 
         titles = get_episode_titles(show, season)
         
