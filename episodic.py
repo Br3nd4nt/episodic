@@ -567,8 +567,9 @@ def preview_changes(mapping):
 @click.option('--config-file', default='rename_config.txt', help='Configuration filename (default: rename_config.txt)')
 @click.option('--all-seasons', is_flag=True, help='Process all seasons automatically')
 @click.option('--verbose', is_flag=True, help='Show detailed output for all operations')
+@click.option('--yes', is_flag=True, help='Automatically confirm all rename operations without prompting')
 @click.version_option(version='1.0.0')
-def main(path, show, season, double, config, preview, save_config, config_file, all_seasons, verbose):
+def main(path, show, season, double, config, preview, save_config, config_file, all_seasons, verbose, yes):
     """episodic - TV Series File Renamer
 
     Automatically rename TV series files using episode titles from IMDB.
@@ -622,7 +623,7 @@ def main(path, show, season, double, config, preview, save_config, config_file, 
         preview_changes(mapping)
         
         if not preview:
-            if click.confirm("\nRename files?"):
+            if yes or click.confirm("\nRename files?"):
                 apply_mapping(mapping, path)
             else:
                 warning_echo("❌ Cancelled.")
@@ -689,7 +690,7 @@ def main(path, show, season, double, config, preview, save_config, config_file, 
                     if verbose:
                         preview_changes(mapping)
                 else:
-                    if click.confirm(f"Rename files in Season {season_num}?"):
+                    if yes or click.confirm(f"Rename files in Season {season_num}?"):
                         apply_mapping(mapping, season_path)
                         total_renamed += sum(1 for new in mapping.values() if new)
                         total_skipped += sum(1 for new in mapping.values() if not new)
@@ -792,7 +793,7 @@ def main(path, show, season, double, config, preview, save_config, config_file, 
             preview_changes(mapping)
         
         if not preview:
-            if click.confirm("\nRename files?"):
+            if yes or click.confirm("\nRename files?"):
                 apply_mapping(mapping, path)
             else:
                 warning_echo("❌ Cancelled.")

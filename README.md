@@ -84,6 +84,9 @@ episodic -p /path/to/episodes -s "Breaking Bad" --save-config my_config.txt
 # Verbose output for debugging
 episodic -p /path/to/episodes -s "Breaking Bad" -n 1 --verbose
 
+# Auto-confirm all operations (no prompts)
+episodic -p /path/to/episodes -s "Breaking Bad" -n 1 --yes
+
 # Help
 episodic -h
 ```
@@ -143,6 +146,7 @@ Edit the file and run with `--config` parameter.
 - ⚠️ **Warnings and errors** with color indication
 - 🔍 **Detailed diagnostics** in verbose mode
 - 🧹 **Safe filename generation** - automatically cleans special characters
+- 🤖 **Auto-confirm mode** - skip prompts with `--yes` flag
 
 ## 🔧 Auto-detection
 
@@ -194,6 +198,15 @@ episodic -p ~/Videos/Complete_Series -s "Breaking Bad" --all-seasons
 episodic -p ~/Videos/Show -s "Your Show" -n 1 -v
 ```
 
+### Example 5: Auto-confirm Mode
+```bash
+# Automatically confirm all rename operations (no prompts)
+episodic -p ~/Videos/Show -s "Your Show" -n 1 --yes
+
+# Process all seasons automatically without prompts
+episodic -p ~/Videos/Complete_Series -s "Breaking Bad" --all-seasons --yes
+```
+
 ## 🐛 Troubleshooting
 
 ### Problem: Show not found on IMDB
@@ -215,6 +228,10 @@ episodic -p ~/Videos/Show -s "Your Show" -n 1 -v
 - Special characters in episode titles are automatically cleaned
 - Check if target filename already exists
 - Ensure you have write permissions in the folder
+
+### Problem: Too many confirmation prompts
+- Use `--yes` flag to automatically confirm all operations
+- Perfect for batch processing or automation scripts
 
 ## 🤝 Contributing
 
