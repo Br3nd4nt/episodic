@@ -16,54 +16,122 @@ def get_episode_titles(show, season):
     try:
         click.echo(f"🔍 Searching for '{show}' on IMDB...")
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
         }
-        response = requests.get(search_url, headers=headers, timeout=10)
+        response = requests.get(search_url, headers=headers, timeout=15)
         response.raise_for_status()
         
         soup = BeautifulSoup(response.text, "html.parser")
         
-        results = soup.find_all("td", class_="result_text")
+        # Try multiple selectors for search results
+        results = (
+            soup.find_all("td", class_="result_text") or
+            soup.find_all("li", class_="find-result-item") or
+            soup.find_all("li", class_="ipc-metadata-list-summary-item") or
+            soup.find_all("div", class_="titleResult")
+        )
+        
         if not results:
             click.echo("❌ No search results found")
+            click.echo("🔧 Try a different show name or check spelling")
             return []
+        
+        click.echo(f"🔍 Found {len(results)} search results")
         
         show_url = None
-        for result in results[:3]:
-            link = result.find("a")
-            if link and "/title/" in link.get("href", ""):
-                show_url = "https://www.imdb.com" + link["href"]
-                break
+        for result in results[:5]:  # Check more results
+            # Try different link selectors
+            link = (
+                result.find("a") or
+                result.find("a", class_="ipc-metadata-list-summary-item__t") or
+                result.find("h3", class_="ipc-title__text")
+            )
+            
+            if link:
+                href = link.get("href", "")
+                if "/title/" in href:
+                    if not href.startswith("http"):
+                        show_url = "https://www.imdb.com" + href
+                    else:
+                        show_url = href
+                    
+                    # Clean up URL - remove query parameters
+                    if "?" in show_url:
+                        show_url = show_url.split("?")[0]
+                    
+                    click.echo(f"✅ Found show: {show_url}")
+                    break
         
         if not show_url:
-            click.echo("❌ No valid show found")
+            click.echo("❌ No valid show found in results")
             return []
         
-        click.echo(f"✅ Found show: {show_url}")
-        
-        episodes_url = f"{show_url}episodes?season={season}"
+        # Get episodes for the season
+        episodes_url = f"{show_url}episodes/?season={season}"
         click.echo(f"🔍 Getting episodes for season {season}...")
         
-        response = requests.get(episodes_url, headers=headers, timeout=10)
+        response = requests.get(episodes_url, headers=headers, timeout=15)
         response.raise_for_status()
         
         soup = BeautifulSoup(response.text, "html.parser")
         
         titles = []
-        episode_items = soup.find_all("div", class_="info")
         
-        for item in episode_items:
-            title_link = item.find("strong").find("a") if item.find("strong") else None
-            if title_link:
-                title = title_link.get_text(strip=True)
-                if title:
-                    titles.append(title)
+        # Try multiple selectors for episode titles
+        episode_selectors = [
+            "div.info strong a",
+            "div.info h4 a", 
+            "h4 a",
+            ".episode-item-wrapper .info strong a",
+            ".episode-item .info strong a",
+            "article h4 a",
+            ".titleColumn a"
+        ]
+        
+        for selector in episode_selectors:
+            episode_links = soup.select(selector)
+            if episode_links:
+                click.echo(f"🎯 Using selector: {selector}")
+                for link in episode_links:
+                    title = link.get_text(strip=True)
+                    if title and len(title) > 1:
+                        # Clean up title - remove episode numbers and extra formatting
+                        title = re.sub(r'^S\d+\.E\d+\s*∙\s*', '', title)  # Remove S1.E1 ∙
+                        title = re.sub(r'^\d+\.\s*', '', title)  # Remove "1. "
+                        title = re.sub(r'^Episode\s+\d+:\s*', '', title, flags=re.IGNORECASE)  # Remove "Episode 1: "
+                        title = title.strip()
+                        if title:
+                            titles.append(title)
+                break
+        
+        # Alternative: try to find episode titles in different structure
+        if not titles:
+            # Look for any links that might be episode titles
+            all_links = soup.find_all("a")
+            for link in all_links:
+                href = link.get("href", "")
+                if "/title/" in href and "season-" in href.lower():
+                    title = link.get_text(strip=True)
+                    if title and len(title) > 2 and not title.isdigit():
+                        # Clean up title
+                        title = re.sub(r'^S\d+\.E\d+\s*∙\s*', '', title)
+                        title = re.sub(r'^\d+\.\s*', '', title)
+                        title = re.sub(r'^Episode\s+\d+:\s*', '', title, flags=re.IGNORECASE)
+                        title = title.strip()
+                        if title:
+                            titles.append(title)
         
         if titles:
             click.echo(f"✅ Found {len(titles)} episode titles")
-            return titles
+            return titles[:50]  # Limit to reasonable number
         else:
             click.echo("❌ No episodes found for this season")
+            click.echo("🔧 Try checking if the season number is correct")
             return []
             
     except requests.RequestException as e:
@@ -111,8 +179,11 @@ def generate_mapping(files, titles, double=False):
     
     return mapping
 
-def dump_config(mapping, path):
-    cfg_path = os.path.join(path, CONFIG_FILENAME)
+def dump_config(mapping, path, filename=None):
+    if filename is None:
+        filename = CONFIG_FILENAME
+    
+    cfg_path = os.path.join(path, filename)
     with open(cfg_path, "w", encoding="utf-8") as f:
         f.write("# Configuration for file renaming\n")
         f.write("# Format: old_file -> new_file\n")
@@ -121,8 +192,12 @@ def dump_config(mapping, path):
         for old, new in mapping.items():
             f.write(f"{old} -> {new}\n")
     
-    click.echo(f"⚠️ Not enough titles. Config saved to {cfg_path}")
-    click.echo("📝 Edit the file and run again with --config")
+    if filename == CONFIG_FILENAME:
+        click.echo(f"⚠️ Not enough titles. Config saved to {cfg_path}")
+        click.echo("📝 Edit the file and run again with -c")
+    else:
+        click.echo(f"💾 Configuration saved to: {cfg_path}")
+        click.echo(f"📝 Edit the file and run: episodic -p {path} -c {filename}")
 
 def load_config(config_path):
     if not os.path.exists(config_path):
@@ -202,8 +277,9 @@ def preview_changes(mapping):
 @click.option('-d', '--double', is_flag=True, help='Flag for double episodes (one file = two episodes)')
 @click.option('-c', '--config', help='Use existing config file for renaming')
 @click.option('-v', '--preview', is_flag=True, help='Only show changes without applying')
+@click.option('--save-config', help='Save configuration to file without applying changes')
 @click.version_option(version='1.0.0')
-def main(path, show, season, double, config, preview):
+def main(path, show, season, double, config, preview, save_config):
     """episodic - TV Series File Renamer
 
 Automatically rename TV series files using episode titles from IMDB.
@@ -212,6 +288,7 @@ Examples:\n
     episodic -p /path/to/episodes -s "Breaking Bad" -n 1\n
     episodic -p /path/to/episodes -s "Breaking Bad" -n 1 -d\n
     episodic -p /path/to/episodes -c rename_config.txt\n
+    episodic -p /path/to/episodes -s "Breaking Bad" -n 1 --save-config my_config.txt\n
 """
     
     files = get_video_files(path)
@@ -224,6 +301,11 @@ Examples:\n
     if config:
         mapping = load_config(config)
         if not mapping:
+            return
+        
+        if save_config:
+            # Save configuration to file
+            dump_config(mapping, path, save_config)
             return
         
         preview_changes(mapping)
@@ -249,6 +331,11 @@ Examples:\n
         if missing_titles > 0:
             click.echo(f"⚠️ Missing titles for {missing_titles} files")
             dump_config(mapping, path)
+            return
+
+        if save_config:
+            # Save configuration to file
+            dump_config(mapping, path, save_config)
             return
 
         preview_changes(mapping)

@@ -25,6 +25,9 @@ episodic -p /path/to/episodes -s "Breaking Bad" -n 1 -v
 # Use config file
 episodic -p /path/to/episodes -c rename_config.txt
 
+# Save config without applying
+episodic -p /path/to/episodes -s "Breaking Bad" -n 1 --save-config my_config.txt
+
 # Help
 episodic -h
 ```
