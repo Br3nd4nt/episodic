@@ -845,6 +845,14 @@ def main(path, show, season, double, config, preview, save_config, config_file, 
                 season = detect_season_from_files(files)
                 if season:
                     success_echo(f"✅ Detected season {season}")
+                    # Auto-detect episode format for single season
+                    season_double = detect_episode_format(files)
+                    if season_double:
+                        highlight_echo(f"🎬 Detected double episodes format for Season {season}")
+                    else:
+                        highlight_echo(f"🎬 Detected single episodes format for Season {season}")
+                    # Use season-specific format detection, but allow manual override
+                    use_double = double if double is not None else season_double
                 else:
                     error_echo("❌ Could not auto-detect season. Please specify with -n")
                     return
